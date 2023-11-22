@@ -2,12 +2,18 @@ import socket
 import struct
 from datetime import datetime
 
-HOST = "127.0.0.1"
+HOST = ""  # no host means listen on all interfaces
 PORT = 12345
 QUEUE_MAX = 1
 
 
 def parse_data(line):
+    """
+        Takes in a line from the Excel, checks to see if its valid data, then processes it into a more readable format.
+
+    :param line: raw line string from read-in Excel.
+    :return:
+    """
     fields = line.strip().split(',')  # split read in line by comma (delimiter used by excel)
 
     if len(fields) != 10 and all(fields):  # ensure this is not a header line and all data is available
@@ -36,7 +42,28 @@ def parse_data(line):
     }
 
 
+def pack_message(data):
+    """
+        Packs the data into a TCP connection ready message.
+        Includes a header that is the length of the message for reconstruction @ the client.
+
+        This is the core of the custom protocol:
+            [HEADER] [DATA]
+
+    :param data: data being snet
+    :return: data with header.
+    """
+    header = struct.pack('!I', len(data))
+    return header + data.encode()
+
+
 def start_server(file_name):
+    """
+        Starts a TCP connection on HOST, PORT. waits for a client to connect before sending processed data
+        from file located at 'file_name'. This file is expected to be an Excel and have 10 elements of data.
+
+    :param file_name: filename of the data to be sent
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
 
@@ -49,9 +76,9 @@ def start_server(file_name):
             for line in file:  # for every line in the file
                 processed_data = parse_data(line)  # parse excel line and process it to send
                 if processed_data:
-                    client_socket.sendall(str(processed_data).encode())  # encode data and send to client
+                    client_socket.sendall(pack_message(str(processed_data)))  # encode data and send to client
 
-        client_socket.sendall("EOD".encode())  # once all data has been processed, this end of data line will be sent
+        client_socket.sendall(pack_message('EOD'))  # once all data has been processed, this end of data line will be sent
         print("All data has been sent to client.")
 
 
